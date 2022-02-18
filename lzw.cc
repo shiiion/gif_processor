@@ -133,8 +133,6 @@ private:
       uint16_t _codebook_value;
       uint8_t _table_key;
 
-      // Allow uninitialized data! Only initialize upon "allocation"
-
       void initialize(uint16_t value = 0, uint8_t key = 0) {
          _connections.fill(kInvalidConnection);
          _codebook_value = value;
