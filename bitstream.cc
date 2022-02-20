@@ -50,4 +50,55 @@ bitfld<uint32_t> do_read32(std::vector<uint8_t> const& source, std::size_t off, 
    return do_read_generic<uint32_t>(source, off, nbits);
 }
 
+
+template <typename _IntType>
+void do_write_generic(std::vector<uint8_t>& sink, std::size_t off, bitfld<_IntType> nbits) {
+   const int write_sz = nbits.mask_len();
+   // to write:
+   //    \count number of bits to write
+   //    \get start & end bits, bytes
+   //    \find starting byte in source
+   //    \allocate enough space for write
+   //    \create a bitfield of one larger
+   //    shift bits into position (start bit align rel)
+   //    OR on the masked bitfield to the source
+   using fit_type = typename smallest_uintegral<bitsize_v<_IntType> + 1>::type;
+   const std::size_t fbit = off, lbit = off + write_sz - 1;
+   const std::size_t fbyte = to_byte(fbit), lbyte = to_byte(lbit);
+   const std::size_t fbit_a = bit_align(fbit);
+   const std::size_t fbit_rel = fbit - fbit_a, lbit_rel = lbit - fbit_a;
+
+   while (sink.size() <= lbyte) {
+      sink.push_back(0);
+   }
+
+   bitfld<fit_type> nbits_expanded(static_cast<fit_type>(nbits._value), static_cast<fit_type>(nbits._mask));
+   bitfld<fit_type> packed_bits = nbits_expanded.pack_to_position(fbit_rel);
+
+   if (is_little_endian()) {
+      uint8_t* sink_packed_bytes = reinterpret_cast<uint8_t*>(&packed_bits._value);
+      for (std::size_t i = 0; i < lbyte - fbyte + 1; i++) {
+         sink[i + fbyte] |= sink_packed_bytes[sizeof(fit_type) - 1 - i];
+      }
+   } else if (is_big_endian()) {
+      uint8_t* sink_packed_bytes = reinterpret_cast<uint8_t*>(&packed_bits._value);
+      for (std::size_t i = 0; i < lbyte - fbyte + 1; i++) {
+         sink[i + fbyte] |= sink_packed_bytes[i];
+      }
+   }
+}
+
+void do_write8(std::vector<uint8_t>& sink, std::size_t off, bitfld<uint8_t> val) {
+   do_write_generic<uint8_t>(sink, off, val);
+}
+
+void do_write16(std::vector<uint8_t>& sink, std::size_t off, bitfld<uint16_t> val) {
+   do_write_generic<uint16_t>(sink, off, val);
+}
+
+void do_write32(std::vector<uint8_t>& sink, std::size_t off, bitfld<uint32_t> val) {
+   do_write_generic<uint32_t>(sink, off, val);
+}
+
+
 }

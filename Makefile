@@ -1,17 +1,22 @@
-all: bin/test
+all: bin/test bin/lzw
 
-bin/test: create_dir test.cc build/bitstream.o
+bin/test: bin build test.cc build/bitstream.o
 	g++ -O0 -g test.cc build/bitstream.o -o bin/test
 
-build/bitstream.o: bitstream.cc bitstream.hh bitfield.hh
-	g++ -c bitstream.cc -o build/bitstream.o
+bin/lzw: bin build lzw.cc build/bitstream.o
+	g++ -O0 -g lzw.cc build/bitstream.o -o bin/lzw
 
-create_dir:
-	mkdir bin
+build/bitstream.o: bitstream.cc bitstream.hh bitfield.hh
+	g++ -O0 -g -c bitstream.cc -o build/bitstream.o
+
+build:
 	mkdir build
+
+bin:
+	mkdir bin
 
 clean:
 	rm -rf build/
 	rm -rf bin/
 
-.PHONY: create_dir clean
+.PHONY: clean

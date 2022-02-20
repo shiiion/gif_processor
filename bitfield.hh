@@ -88,8 +88,8 @@ struct smallest_uintegral_imp<64> {
 template <typename T>
 T gen_mask(int begin, int end) {
    static_assert(std::is_integral_v<T>, "gen_mask only works on integral types");
-   const T mask_left = begin == 0 ? ~(T{0}) : (static_cast<T>(1 << (bitsize_v<T> - begin)) - 1);
-   const T mask_right = ~(static_cast<T>(1 << (bitsize_v<T> - end - 1)) - 1);
+   const T mask_left = begin == 0 ? ~(T{0}) : (static_cast<T>(T{1} << (bitsize_v<T> - begin)) - 1);
+   const T mask_right = ~(static_cast<T>(T{1} << (bitsize_v<T> - end - 1)) - 1);
    return mask_left & mask_right;
 }
 
@@ -125,11 +125,11 @@ struct bitfld {
       if constexpr (sizeof(T) <= sizeof(unsigned int)) {
          constexpr int kExtraBits = bitsize_v<unsigned int> - bitsize_v<T>;
          const int leading_bits = __builtin_clz(static_cast<unsigned int>(_mask)) - kExtraBits;
-         const T maskoff_right = ~((1 << (bitsize_v<T> - (leading_bits + new_len))) - 1);
+         const T maskoff_right = ~((T{1} << (bitsize_v<T> - (leading_bits + new_len))) - 1);
          return bitfld<T>(static_cast<T>(_value), static_cast<T>(_mask & maskoff_right));
       } else {  // sizeof(T) == sizeof(unsigned long long)
          const int leading_bits = __builtin_clzll(static_cast<unsigned long long>(_mask));
-         const T maskoff_right = ~((1 << (bitsize_v<T> - (leading_bits + new_len))) - 1);
+         const T maskoff_right = ~((T{1} << (bitsize_v<T> - (leading_bits + new_len))) - 1);
          return bitfld<T>(static_cast<T>(_value), static_cast<T>(_mask & maskoff_right));
       }
    }
@@ -165,5 +165,10 @@ struct bitfld {
       }
    }
 };
+
+template <typename T>
+constexpr bitfld<T> create_nbits(T value, int num_bits) {
+   return bitfld<T>(value, bitsize_v<T> - num_bits, bitsize_v<T> - 1);
+}
 
 }
