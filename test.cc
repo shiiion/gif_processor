@@ -1,7 +1,10 @@
 #include <cstdio>
+#include <ctime>
+#include <random>
 
 #include "bitstream.hh"
 #include "bitfield.hh"
+#include "lzw.hh"
 
 void test_cbw_istream() {
    std::vector<uint8_t> sample;
@@ -57,6 +60,47 @@ void test_vbw_iostreams() {
    printf("val: %x  nbits: %d\n", val._value, val.mask_len());
 }
 
+template <std::size_t _Bits>
+void test_lzw_random_compress() {
+   std::random_device r;
+   std::default_random_engine engine(r());
+   std::uniform_int_distribution<int> random_dist(0, (1 << _Bits) - 1);
+
+   std::vector<uint8_t> raw_data, compressed_data, decompressed_data;
+   gifproc::util::cbw_ostream<8> initial_stream(raw_data);
+   for (int i = 0; i < 4096 * 4096; i++) {
+      initial_stream << static_cast<uint8_t>(random_dist(engine));
+   }
+
+   double start = static_cast<double>(clock()) / CLOCKS_PER_SEC;
+   gifproc::util::cbw_istream<8> raw_stream_in(raw_data, initial_stream.size());
+   gifproc::util::vbw_ostream compress_stream_out(compressed_data);
+   gifproc::lzw::lzw_compress(raw_stream_in, compress_stream_out);
+
+   gifproc::util::vbw_istream compress_stream_in(compressed_data, compress_stream_out.size());
+   gifproc::util::cbw_ostream<8> decompress_stream_out(decompressed_data);
+   gifproc::lzw::lzw_decompress(compress_stream_in, decompress_stream_out);
+   double end = static_cast<double>(clock()) / CLOCKS_PER_SEC;
+
+   double compress_ratio = static_cast<double>(compress_stream_out.size()) / initial_stream.size();
+   printf("Deflation ratio for %d bit data: %f (%d raw %d compressed) completed in %f seconds\n",
+          _Bits,
+          compress_ratio,
+          initial_stream.size(),
+          compress_stream_out.size(),
+          end - start);
+
+   for (int i = 0; i < raw_data.size(); i++) {
+      assert(raw_data[i] == decompressed_data[i]);
+   }
+}
+
 int main() {
-   test_vbw_iostreams();
+   test_lzw_random_compress<2>();
+   test_lzw_random_compress<3>();
+   test_lzw_random_compress<4>();
+   test_lzw_random_compress<5>();
+   test_lzw_random_compress<6>();
+   test_lzw_random_compress<7>();
+   test_lzw_random_compress<8>();
 }

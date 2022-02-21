@@ -1,13 +1,13 @@
-all: bin/test bin/lzw
+all: bin/test
 
-bin/test: bin build test.cc build/bitstream.o
-	g++ -O0 -g test.cc build/bitstream.o -o bin/test
+bin/test: bin build test.cc build/bitstream.o build/lzw.o
+	g++ -O2 test.cc build/bitstream.o build/lzw.o -o bin/test
 
-bin/lzw: bin build lzw.cc build/bitstream.o
-	g++ -O0 -g lzw.cc build/bitstream.o -o bin/lzw
+build/lzw.o: lzw.cc lzw.hh bitfield.hh bitstream.hh
+	g++ -O2 -c lzw.cc -o build/lzw.o
 
 build/bitstream.o: bitstream.cc bitstream.hh bitfield.hh
-	g++ -O0 -g -c bitstream.cc -o build/bitstream.o
+	g++ -O2 -c bitstream.cc -o build/bitstream.o
 
 build:
 	mkdir build

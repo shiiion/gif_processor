@@ -54,14 +54,14 @@ enum class decompress_status {
    kInvalidCompressCode,
 };
 
-decompress_status lzw_decompress_1bpp(util::cbw_istream<1>& in, util::vbw_ostream& out);
-decompress_status lzw_decompress_2bpp(util::cbw_istream<2>& in, util::vbw_ostream& out);
-decompress_status lzw_decompress_3bpp(util::cbw_istream<3>& in, util::vbw_ostream& out);
-decompress_status lzw_decompress_4bpp(util::cbw_istream<4>& in, util::vbw_ostream& out);
-decompress_status lzw_decompress_5bpp(util::cbw_istream<5>& in, util::vbw_ostream& out);
-decompress_status lzw_decompress_6bpp(util::cbw_istream<6>& in, util::vbw_ostream& out);
-decompress_status lzw_decompress_7bpp(util::cbw_istream<7>& in, util::vbw_ostream& out);
-decompress_status lzw_decompress_8bpp(util::cbw_istream<8>& in, util::vbw_ostream& out);
+decompress_status lzw_decompress_1bpp(util::vbw_istream& in, util::cbw_ostream<1>& out);
+decompress_status lzw_decompress_2bpp(util::vbw_istream& in, util::cbw_ostream<2>& out);
+decompress_status lzw_decompress_3bpp(util::vbw_istream& in, util::cbw_ostream<3>& out);
+decompress_status lzw_decompress_4bpp(util::vbw_istream& in, util::cbw_ostream<4>& out);
+decompress_status lzw_decompress_5bpp(util::vbw_istream& in, util::cbw_ostream<5>& out);
+decompress_status lzw_decompress_6bpp(util::vbw_istream& in, util::cbw_ostream<6>& out);
+decompress_status lzw_decompress_7bpp(util::vbw_istream& in, util::cbw_ostream<7>& out);
+decompress_status lzw_decompress_8bpp(util::vbw_istream& in, util::cbw_ostream<8>& out);
 
 template <std::size_t _Bits>
 decompress_status lzw_decompress(util::vbw_istream& in, util::cbw_ostream<_Bits>& out) {

@@ -97,6 +97,10 @@ public:
                       ((static_cast<streampos>(_size) + _Nbits_sp - 1) / _Nbits_sp) * _Nbits_sp));
    }
 
+   constexpr streampos tell_index() const {
+      return _pos / _Nbits_sp;
+   }
+
    constexpr void seek_end() {
       _pos = static_cast<streampos>(_size);
    }
@@ -120,7 +124,7 @@ public:
    using stream_integral = typename smallest_uintegral<_Nbits>::type;
    using in_type = bitfld<stream_integral>;
 
-   constexpr cbw_ostream(std::vector<uint8_t>& sink, std::size_t initial_size)
+   constexpr cbw_ostream(std::vector<uint8_t>& sink, std::size_t initial_size = 0)
          : _sink(sink), _cpos(initial_size) {}
    cbw_ostream(cbw_ostream&&) = delete;
 
@@ -141,6 +145,10 @@ public:
    cbw_ostream<_Nbits>& operator<<(stream_integral rhs) {
       write(rhs);
       return *this;
+   }
+
+   constexpr streampos tell_index() const {
+      return _cpos / _Nbits;
    }
 
    constexpr std::size_t size() const {

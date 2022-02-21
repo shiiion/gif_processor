@@ -30,6 +30,7 @@ template <std::size_t _Bits>
 class _codebook_base {
 protected:
    constexpr static uint16_t kMaxCodebookEntries = static_cast<uint16_t>(1 << 12);
+   constexpr static uint16_t kHighestCodebookEntry = kMaxCodebookEntries - 1;
 
    uint16_t _codebook_size;
 
@@ -41,19 +42,9 @@ protected:
       return clear_code() + 1;
    }
 
-   constexpr uint8_t get_bitsize() const {
-      // The number of bits for variable lzw is dependant on the highest (currently) generatable value:
-      //    floor(log2(_codebook_size))
-      // This will always be at least one greater than the _Bits
-      return 32 - __builtin_clz(static_cast<unsigned int>(_codebook_size - 1));
-   }
-
    _codebook_base(std::size_t initial_size) : _codebook_size(initial_size) {}
 
 public:
-   constexpr lzw_bitfld clear_code_now() const {
-      return util::create_nbits(clear_code(), get_bitsize());
-   }
 };
 
 template <std::size_t _Bits>
@@ -76,19 +67,35 @@ private:
 
    codebook_entry _codebook_head;
    std::array<codebook_entry, base_type::kMaxCodebookEntries> _codebook_table;
-   uint16_t _codebook_size;
 
    compress_codebook() : _codebook_base<_Bits>(base_type::eoi_code() + 1) {
+      reset_codebook();
+   }
+
+   constexpr uint8_t get_write_bitsize() const {
+      // The number of bits for variable lzw is dependant on the highest (currently) generatable value:
+      //    floor(log2(_codebook_size))
+      // This will always be at least one greater than the _Bits
+      return 32 - __builtin_clz(static_cast<unsigned int>(base_type::_codebook_size - 1));
+   }
+
+   void reset_codebook() {
       _codebook_head.initialize();
-      for (uint16_t i = 0; i < _codebook_size; i++) {
+      for (uint16_t i = 0; i < base_type::_codebook_size; i++) {
          _codebook_table[i].initialize(i);
-         _codebook_head._connections[i] = i;
+      }
+      for (std::size_t i = 0; i < _codebook_head._connections.size(); i++) {
+         _codebook_head._connections[i] = static_cast<uint16_t>(i);
       }
    }
 
 public:
    static std::unique_ptr<compress_codebook<_Bits>> alloc_codebook() {
       return std::unique_ptr<compress_codebook<_Bits>>(new compress_codebook<_Bits>());
+   }
+
+   constexpr lzw_bitfld clear_code_now() const {
+      return util::create_nbits(base_type::clear_code(), get_write_bitsize());
    }
 
    // Does the operation of looking up an entry, breaking at the first miss
@@ -108,34 +115,37 @@ public:
          const uint16_t final_index = it->_connections[unit];
          return lookup_result(util::create_nbits<uint16_t>(
                                  _codebook_table[final_index]._codebook_value,
-                                 base_type::get_bitsize()),
+                                 get_write_bitsize()),
                               final_index,
                               lookup_result::kEOFUnit);
       }
       data_stream.rewind(1);
       
-      return lookup_result(util::create_nbits(it->_codebook_value, base_type::get_bitsize()), table_index, unit);
+      return lookup_result(util::create_nbits(it->_codebook_value, get_write_bitsize()), table_index, unit);
    }
 
    // Does the operation of adding the new entry, signaling EOI, and signaling clear code
    std::optional<lzw_bitfld> lookup_phase_2(lookup_result const& last_result) {
       if (last_result._miss == lookup_result::kEOFUnit) {
          // Signal we need to write an EOI code
-         return util::create_nbits(base_type::eoi_code(), base_type::get_bitsize());
+         return util::create_nbits(base_type::eoi_code(), get_write_bitsize());
       }
 
-      const uint16_t next_code = _codebook_size;
+      const uint16_t next_code = base_type::_codebook_size;
 
-      if (next_code == base_type::kMaxCodebookEntries) {
+      if (next_code == base_type::kHighestCodebookEntry) {
          // Signal that we need to write a clear code
-         lzw_bitfld ret = util::create_nbits(base_type::clear_code(), base_type::get_bitsize());
-         _codebook_size = base_type::eoi_code() + 1;
+         lzw_bitfld ret = util::create_nbits(base_type::clear_code(), get_write_bitsize());
+
+         // Reset the codebook to it's initial state
+         base_type::_codebook_size = base_type::eoi_code() + 1;
+         reset_codebook();
          return ret;
       }
 
-      _codebook_table[last_result._entry]._connections[last_result._miss] = _codebook_size;
-      _codebook_table[_codebook_size].initialize(next_code);
-      _codebook_size++;
+      _codebook_table[last_result._entry]._connections[last_result._miss] = next_code;
+      _codebook_table[next_code].initialize(next_code);
+      base_type::_codebook_size++;
 
       return std::nullopt;
    }
@@ -210,11 +220,7 @@ private:
    decompress_codebook()
          : _codebook_base<_Bits>(base_type::eoi_code() + 1),
            _prev_code(codebook_entry::kInvalidConnection) {
-      for (uint16_t i = 0; i < base_type::_codebook_size; i++) {
-         _codebook_table[i].initialize(codebook_entry::kInvalidConnection,
-                                       static_cast<uint8_t>(i),
-                                       static_cast<uint8_t>(i));
-      }
+      reset_codebook();
    }
 
    // Decompress a code by back-tracing the head of its sequence and caching the path, then running forward from the
@@ -237,6 +243,20 @@ private:
       }
    }
 
+   void reset_codebook() {
+      for (uint16_t i = 0; i < base_type::eoi_code() + 1; i++) {
+         _codebook_table[i].initialize(codebook_entry::kInvalidConnection,
+                                       static_cast<uint8_t>(i),
+                                       static_cast<uint8_t>(i));
+      }
+   }
+
+   // The decompressor is always one step behind the compressor, so we need to adjust how we determine the bitsize
+   // we will read
+   constexpr uint8_t get_read_bitsize() const {
+      return 32 - __builtin_clz(static_cast<unsigned int>(base_type::_codebook_size));
+   }
+
 public:
    static std::unique_ptr<decompress_codebook<_Bits>> alloc_codebook() {
       return std::unique_ptr<decompress_codebook<_Bits>>(new decompress_codebook<_Bits>());
@@ -247,7 +267,7 @@ public:
          return decompress_status::kUnexpectedEof;
       }
 
-      const uint16_t start_code = static_cast<uint16_t>(in.read_extract(base_type::get_bitsize()));
+      const uint16_t start_code = static_cast<uint16_t>(in.read_extract(get_read_bitsize()));
       if (start_code != base_type::clear_code()) {
          return decompress_status::kMissingInitialClearCode;
       }
@@ -255,6 +275,7 @@ public:
       if (in.eof()) {
          return decompress_status::kUnexpectedEof;
       }
+      return decompress_status::kSuccess;
    }
 
    decompress_status decompress_single_code(util::vbw_istream& in, util::cbw_ostream<_Bits>& out) {
@@ -263,14 +284,16 @@ public:
          return decompress_status::kUnexpectedEof;
       }
 
-      const uint16_t cur_code = static_cast<uint16_t>(in.read_extract(base_type::get_bitsize()));
+      const uint16_t cur_code = static_cast<uint16_t>(in.read_extract(get_read_bitsize()));
       // Handle EOI and clear codes
       if (cur_code == base_type::eoi_code()) {
          in.seek_end();
          return decompress_status::kSuccess;
       } else if (cur_code == base_type::clear_code()) {
+         // Fully reset our codebook to the initial state
          base_type::_codebook_size = base_type::eoi_code() + 1;
          _prev_code = codebook_entry::kInvalidConnection;
+         reset_codebook();
          return decompress_status::kSuccess;
       }
 
@@ -302,6 +325,7 @@ public:
          _codebook_table[base_type::_codebook_size].initialize(_prev_code,
                                                                _codebook_table[_prev_code]._base_index,
                                                                _codebook_table[_prev_code]._base_index);
+         base_type::_codebook_size++;
       } else if (cur_code < base_type::_codebook_size) {
          // We may need to handle a just-cleared codebook, signified by _prev_code == codebook_entry::kInvalidConnection
          if (_prev_code == codebook_entry::kInvalidConnection) {
@@ -312,7 +336,8 @@ public:
             // Then handle adding a new code to our codebook
             _codebook_table[base_type::_codebook_size].initialize(_prev_code,
                                                                   _codebook_table[cur_code]._base_index,
-                                                                  _codebook_table[cur_code]._base_index);
+                                                                  _codebook_table[_prev_code]._base_index);
+            base_type::_codebook_size++;
          }
       } else {
          // Invalid code, we can't infer what the encoder was doing
@@ -320,7 +345,6 @@ public:
       }
 
       _prev_code = cur_code;
-      base_type::_codebook_size++;
 
       return decompress_status::kSuccess;
    }
@@ -379,15 +403,6 @@ void lzw_compress_8bpp(util::cbw_istream<8>& in, util::vbw_ostream& out) {
    lzw_compress_generic(in, out);
 }
 
-
-
-
-
-
-
-
-
-
 decompress_status lzw_decompress_1bpp(util::vbw_istream& in, util::cbw_ostream<1>& out) {
    return lzw_decompress_generic(in, out);
 }
@@ -419,69 +434,5 @@ decompress_status lzw_decompress_7bpp(util::vbw_istream& in, util::cbw_ostream<7
 decompress_status lzw_decompress_8bpp(util::vbw_istream& in, util::cbw_ostream<8>& out) {
    return lzw_decompress_generic(in, out);
 }
-
-}
-
-std::size_t build_sample_image(std::vector<uint8_t>& img_out) {
-   gifproc::util::cbw_ostream<3> img_build(img_out, 0);
-   for (int i = 0; i < 3; i++) {
-      img_build.write(1);
-      img_build.write(1);
-      img_build.write(1);
-      img_build.write(1);
-      img_build.write(1);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-   }
-   for (int i = 0; i < 2; i++) {
-      img_build.write(4);
-      img_build.write(4);
-      img_build.write(4);
-      img_build.write(4);
-      img_build.write(4);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-   }
-   for (int i = 0; i < 2; i++) {
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(4);
-      img_build.write(4);
-      img_build.write(4);
-      img_build.write(4);
-      img_build.write(4);
-   }
-   for (int i = 0; i < 3; i++) {
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(2);
-      img_build.write(1);
-      img_build.write(1);
-      img_build.write(1);
-      img_build.write(1);
-      img_build.write(1);
-   }
-   return img_build.size();
-}
-
-int main(int argc, char** argv) {
-   std::vector<uint8_t> vec;
-   std::vector<uint8_t> ovec;
-
-   auto sz = build_sample_image(vec);
-   gifproc::util::cbw_istream<2> in(vec, sz);
-   gifproc::util::vbw_ostream out(ovec);
-   gifproc::lzw::lzw_compress(in, out);
 
 }
