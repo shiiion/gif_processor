@@ -4,6 +4,7 @@
 
 #include "bitstream.hh"
 #include "bitfield.hh"
+#include "gif_processor.hh"
 #include "lzw.hh"
 
 void test_cbw_istream() {
@@ -68,7 +69,7 @@ void test_lzw_random_compress() {
 
    std::vector<uint8_t> raw_data, compressed_data, decompressed_data;
    gifproc::util::cbw_ostream<8> initial_stream(raw_data);
-   for (int i = 0; i < 4096 * 4096; i++) {
+   for (int i = 0; i < 512 * 512; i++) {
       initial_stream << static_cast<uint8_t>(random_dist(engine));
    }
 
@@ -79,28 +80,34 @@ void test_lzw_random_compress() {
 
    gifproc::util::vbw_istream compress_stream_in(compressed_data, compress_stream_out.size());
    gifproc::util::cbw_ostream<8> decompress_stream_out(decompressed_data);
-   gifproc::lzw::lzw_decompress(compress_stream_in, decompress_stream_out);
+   gifproc::lzw::decompress_status status = gifproc::lzw::lzw_decompress(compress_stream_in, decompress_stream_out);
    double end = static_cast<double>(clock()) / CLOCKS_PER_SEC;
 
+   assert(status == gifproc::lzw::decompress_status::kSuccess);
+
    double compress_ratio = static_cast<double>(compress_stream_out.size()) / initial_stream.size();
-   printf("Deflation ratio for %d bit data: %f (%d raw %d compressed) completed in %f seconds\n",
+   printf("Deflation ratio for %ld bit data: %f (%ld raw %ld compressed) completed in %f seconds\n",
           _Bits,
           compress_ratio,
           initial_stream.size(),
           compress_stream_out.size(),
           end - start);
 
-   for (int i = 0; i < raw_data.size(); i++) {
+   for (std::size_t i = 0; i < raw_data.size(); i++) {
       assert(raw_data[i] == decompressed_data[i]);
    }
 }
 
 int main() {
-   test_lzw_random_compress<2>();
-   test_lzw_random_compress<3>();
-   test_lzw_random_compress<4>();
-   test_lzw_random_compress<5>();
-   test_lzw_random_compress<6>();
-   test_lzw_random_compress<7>();
-   test_lzw_random_compress<8>();
+   gifproc::gif test_gif;
+   test_gif.open("image0.gif");
+   int ctr = 0;
+   test_gif.foreach_frame_raw([&ctr] (std::vector<uint8_t> const& img, gifproc::gif_frame_context const& ctx, std::vector<gifproc::color_table_entry> const& gct) {
+         printf("Frame %d: bpp=%ld dims=%d %d\n", ctr, ctx._descriptor._lct_present ? ctx._descriptor._lct_size + 1 : gct.size(), ctx._descriptor._image_width, ctx._descriptor._image_height);
+         if (ctx._extension) {
+            printf("\tExtension data: Transparent=%d, delay time = %d, transparent index=%d\n",
+                  ctx._extension->_transparent_enabled, ctx._extension->_delay_time, ctx._extension->_transparent_index);
+         }
+         ctr++;
+      });
 }

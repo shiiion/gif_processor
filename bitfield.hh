@@ -94,6 +94,14 @@ T gen_mask(int begin, int end) {
 }
 
 template <typename T>
+T gen_mask_reverse(int lsb, int msb) {
+   static_assert(std::is_integral_v<T>, "gen_mask_reverse only works on integral types");
+   const T mask_left = msb == (bitsize_v<T> - 1) ? ~(T{0}) : (static_cast<T>(T{1} << (msb + 1)) - 1);
+   const T mask_right = ~(static_cast<T>(T{1} << lsb) - 1);
+   return mask_left & mask_right;
+}
+
+template <typename T>
 struct bitfld {
    static_assert(std::is_integral_v<T>, "bitfld only supports raw integral types");
    static_assert(sizeof(T) <= sizeof(unsigned int) || sizeof(T) == sizeof(unsigned long long), "bitfld only supports "
@@ -105,8 +113,8 @@ struct bitfld {
 
    constexpr bitfld(T val, T mask)
          : _mask(static_cast<T_u>(mask)), _value(static_cast<T_u>(val) & _mask) {}
-   constexpr bitfld(T val, int mask_begin, int mask_end)
-         : _mask(static_cast<T_u>(gen_mask<T>(mask_begin, mask_end))), _value(static_cast<T_u>(val) & _mask) {}
+   constexpr bitfld(T val, int lsb, int msb)
+         : _mask(static_cast<T_u>(gen_mask_reverse<T>(lsb, msb))), _value(static_cast<T_u>(val) & _mask) {}
    constexpr bitfld() : _mask(T_u{0}), _value(T_u{0}) {}
 
    constexpr int mask_len() const {
@@ -144,7 +152,8 @@ struct bitfld {
       }
    }
 
-   constexpr bitfld<T> pack_to_position(int from_msb) const {
+   constexpr bitfld<T> pack_to_position(int from_lsb) const {
+      const int from_msb = bitsize_v<T> - from_lsb - 1;
       if constexpr (sizeof(T) <= sizeof(unsigned int)) {
          constexpr int kExtraBits = bitsize_v<unsigned int> - bitsize_v<T>;
          const int leading_bits = __builtin_clz(static_cast<unsigned int>(_mask)) - kExtraBits;
@@ -168,7 +177,7 @@ struct bitfld {
 
 template <typename T>
 constexpr bitfld<T> create_nbits(T value, int num_bits) {
-   return bitfld<T>(value, bitsize_v<T> - num_bits, bitsize_v<T> - 1);
+   return bitfld<T>(value, 0, num_bits - 1);
 }
 
 }

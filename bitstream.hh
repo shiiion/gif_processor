@@ -106,7 +106,7 @@ public:
    }
 
    constexpr bool eof() const {
-      return _pos >= _size;
+      return _pos >= static_cast<streampos>(_size);
    }
 };
 
@@ -201,7 +201,7 @@ public:
    }
 
    constexpr bool eof() const {
-      return _pos >= _size;
+      return _pos >= static_cast<streampos>(_size);
    }
 };
 

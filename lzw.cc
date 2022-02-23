@@ -1,7 +1,5 @@
 #include <cassert>
 #include <cstdint>
-#include <fstream>
-#include <iostream>
 #include <memory>
 #include <vector>
 #include <optional>
@@ -350,6 +348,7 @@ public:
    }
 };
 
+
 template <std::size_t _Bits>
 decompress_status lzw_decompress_generic(util::vbw_istream& in, util::cbw_ostream<_Bits>& out) {
    auto codebook = decompress_codebook<_Bits>::alloc_codebook();
@@ -403,6 +402,39 @@ void lzw_compress_8bpp(util::cbw_istream<8>& in, util::vbw_ostream& out) {
    lzw_compress_generic(in, out);
 }
 
+void lzw_compress(std::vector<uint8_t> const& in, std::size_t nbits, uint8_t bpp, util::vbw_ostream& out) {
+   if (bpp == 1) {
+      util::cbw_istream<1> in_stream(in, nbits);
+      lzw_compress_1bpp(in_stream, out);
+   } else if (bpp == 2) {
+      util::cbw_istream<2> in_stream(in, nbits);
+      lzw_compress_2bpp(in_stream, out);
+   } else if (bpp == 3) {
+      util::cbw_istream<3> in_stream(in, nbits);
+      lzw_compress_3bpp(in_stream, out);
+   } else if (bpp == 4) {
+      util::cbw_istream<4> in_stream(in, nbits);
+      lzw_compress_4bpp(in_stream, out);
+   } else if (bpp == 5) {
+      util::cbw_istream<5> in_stream(in, nbits);
+      lzw_compress_5bpp(in_stream, out);
+   } else if (bpp == 6) {
+      util::cbw_istream<6> in_stream(in, nbits);
+      lzw_compress_6bpp(in_stream, out);
+   } else if (bpp == 7) {
+      util::cbw_istream<7> in_stream(in, nbits);
+      lzw_compress_7bpp(in_stream, out);
+   } else if (bpp == 8) {
+      util::cbw_istream<8> in_stream(in, nbits);
+      lzw_compress_8bpp(in_stream, out);
+   }
+}
+
+void lzw_compress(std::vector<uint8_t> const& in, std::size_t nbits, uint8_t bpp, std::vector<uint8_t>& out) {
+   util::vbw_ostream stream_out(out);
+   lzw_compress(in, nbits, bpp, stream_out);
+}
+
 decompress_status lzw_decompress_1bpp(util::vbw_istream& in, util::cbw_ostream<1>& out) {
    return lzw_decompress_generic(in, out);
 }
@@ -433,6 +465,49 @@ decompress_status lzw_decompress_7bpp(util::vbw_istream& in, util::cbw_ostream<7
 
 decompress_status lzw_decompress_8bpp(util::vbw_istream& in, util::cbw_ostream<8>& out) {
    return lzw_decompress_generic(in, out);
+}
+
+lzw_decode_result lzw_decompress(util::vbw_istream& in, std::vector<uint8_t>& out, uint8_t bpp) {
+   lzw_decode_result result = {};
+   if (bpp == 1) {
+      util::cbw_ostream<1> stream_out(out);
+      result._status = lzw_decompress_1bpp(in, stream_out);
+      result._bits_written = stream_out.size();
+   } else if (bpp == 2) {
+      util::cbw_ostream<2> stream_out(out);
+      result._status = lzw_decompress_2bpp(in, stream_out);
+      result._bits_written = stream_out.size();
+   } else if (bpp == 3) {
+      util::cbw_ostream<3> stream_out(out);
+      result._status = lzw_decompress_3bpp(in, stream_out);
+      result._bits_written = stream_out.size();
+   } else if (bpp == 4) {
+      util::cbw_ostream<4> stream_out(out);
+      result._status = lzw_decompress_4bpp(in, stream_out);
+      result._bits_written = stream_out.size();
+   } else if (bpp == 5) {
+      util::cbw_ostream<5> stream_out(out);
+      result._status = lzw_decompress_5bpp(in, stream_out);
+      result._bits_written = stream_out.size();
+   } else if (bpp == 6) {
+      util::cbw_ostream<6> stream_out(out);
+      result._status = lzw_decompress_6bpp(in, stream_out);
+      result._bits_written = stream_out.size();
+   } else if (bpp == 7) {
+      util::cbw_ostream<7> stream_out(out);
+      result._status = lzw_decompress_7bpp(in, stream_out);
+      result._bits_written = stream_out.size();
+   } else if (bpp == 8) {
+      util::cbw_ostream<8> stream_out(out);
+      result._status = lzw_decompress_8bpp(in, stream_out);
+      result._bits_written = stream_out.size();
+   }
+   return result;
+}
+
+lzw_decode_result lzw_decompress(std::vector<uint8_t> const& in, std::vector<uint8_t>& out, uint8_t bpp) {
+   util::vbw_istream stream_in(in, util::to_bit(in.size()));
+   return lzw_decompress(stream_in, out, bpp);
 }
 
 }

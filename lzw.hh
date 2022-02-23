@@ -38,6 +38,9 @@ void lzw_compress(util::cbw_istream<_Bits>& in, util::vbw_ostream& out) {
    }
 }
 
+void lzw_compress(std::vector<uint8_t> const& in, std::size_t nbits, uint8_t bpp, util::vbw_ostream& out);
+void lzw_compress(std::vector<uint8_t> const& in, std::size_t nbits, uint8_t bpp, std::vector<uint8_t>& out);
+
 // zero: Success, non-zero: Failure
 enum class decompress_status {
    kSuccess = 0,
@@ -83,5 +86,13 @@ decompress_status lzw_decompress(util::vbw_istream& in, util::cbw_ostream<_Bits>
       return lzw_decompress_8bpp(in, out);
    }
 }
+
+struct lzw_decode_result {
+   std::size_t _bits_written;
+   decompress_status _status;
+};
+
+lzw_decode_result lzw_decompress(util::vbw_istream& in, std::vector<uint8_t>& out, uint8_t bpp);
+lzw_decode_result lzw_decompress(std::vector<uint8_t> const& in, std::vector<uint8_t>& out, uint8_t bpp);
 
 }
