@@ -8,6 +8,7 @@
 
 #include "bitstream.hh"
 #include "lzw.hh"
+#include "quantize.hh"
 
 namespace gifproc {
 namespace {
@@ -15,6 +16,16 @@ constexpr std::string_view kGif87Magic = "GIF87a";
 constexpr std::string_view kGif89Magic = "GIF89a";
 constexpr std::string_view kNetscapeId = "NETSCAPE";
 constexpr std::string_view kNetscapeAuth = "2.0";
+
+struct color_table_info {
+   constexpr color_table_info(std::vector<color_table_entry> const& table, uint8_t tp_idx)
+         : _table(table), _tp_idx(tp_idx), _tp_present(true) {}
+   constexpr color_table_info(std::vector<color_table_entry> const& table)
+         : _table(table), _tp_idx(0), _tp_present(false) {}
+   std::vector<color_table_entry> const& _table;
+   uint8_t _tp_idx;
+   bool _tp_present;
+};
 
 std::optional<gif_version> parse_gif_version(std::ifstream& in) {
    gif_header header;
@@ -81,56 +92,6 @@ gif_parse_result for_each_subblock(std::ifstream& in,
       }
    }
    return gif_parse_result::kSuccess;
-}
-
-template <std::size_t _Bits>
-void dequantize_image(std::vector<uint8_t> const& q_in,
-                      std::size_t q_bits,
-                      std::vector<uint8_t>& dq_out,
-                      std::vector<color_table_entry> const& color_table) {
-   dq_out.clear();
-   util::cbw_istream<_Bits> in(q_in, q_bits);
-   while (!in.eof()) {
-      uint8_t val;
-      in >> val;
-      dq_out.push_back(color_table[val]._red);
-      dq_out.push_back(color_table[val]._green);
-      dq_out.push_back(color_table[val]._blue);
-      dq_out.push_back(255);
-   }
-}
-
-void dequantize_image(std::vector<uint8_t> const& q_in,
-                      std::size_t q_bits,
-                      std::vector<uint8_t>& dq_out,
-                      std::vector<color_table_entry> const& color_table,
-                      uint8_t bits) {
-   switch (bits) {
-      case 2:
-         dequantize_image<2>(q_in, q_bits, dq_out, color_table);
-         break;
-      case 3:
-         dequantize_image<3>(q_in, q_bits, dq_out, color_table);
-         break;
-      case 4:
-         dequantize_image<4>(q_in, q_bits, dq_out, color_table);
-         break;
-      case 5:
-         dequantize_image<5>(q_in, q_bits, dq_out, color_table);
-         break;
-      case 6:
-         dequantize_image<6>(q_in, q_bits, dq_out, color_table);
-         break;
-      case 7:
-         dequantize_image<7>(q_in, q_bits, dq_out, color_table);
-         break;
-      case 8:
-         dequantize_image<8>(q_in, q_bits, dq_out, color_table);
-         break;
-      default:
-         assert(false);
-         break;
-   }
 }
 }
 
@@ -295,7 +256,50 @@ gif_parse_result gif::parse_contents() {
    return trailer_found ? gif_parse_result::kSuccess : gif_parse_result::kUnexpectedEof;
 }
 
-void gif::decode_image(gif_frame_context const& frame_ctx, std::vector<uint8_t>& image_out) const {
+quant::dequant_params gif::dq_params_for_frame(gif_frame_context const& frame) const {
+   static std::vector<color_table_entry> empty_table;
+   if (empty_table.size() != 256) {
+      empty_table.resize(256, {});
+   }
+
+   if (frame._descriptor._lct_present) {
+      if (frame._extension && frame._extension->_transparent_enabled) {
+         return quant::dequant_params(frame._local_color_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
+                                      frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
+                                      frame._descriptor._image_width, frame._descriptor._image_height,
+                                      _ctx->_lsd._bg_color_index, frame._descriptor._lct_size + 1,
+                                      frame._descriptor._interlaced, frame._extension->_transparent_index);
+      } else {
+         return quant::dequant_params(frame._local_color_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
+                                      frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
+                                      frame._descriptor._image_width, frame._descriptor._image_height,
+                                      _ctx->_lsd._bg_color_index, frame._descriptor._lct_size + 1,
+                                      frame._descriptor._interlaced);
+      }
+   } else if (_ctx->_lsd._gct_present) {
+      if (frame._extension && frame._extension->_transparent_enabled) {
+         return quant::dequant_params(_ctx->_global_color_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
+                                      frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
+                                      frame._descriptor._image_width, frame._descriptor._image_height,
+                                      _ctx->_lsd._bg_color_index, _ctx->_lsd._gct_size + 1,
+                                      frame._descriptor._interlaced, frame._extension->_transparent_index);
+      } else {
+         return quant::dequant_params(_ctx->_global_color_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
+                                      frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
+                                      frame._descriptor._image_width, frame._descriptor._image_height,
+                                      _ctx->_lsd._bg_color_index, _ctx->_lsd._gct_size + 1,
+                                      frame._descriptor._interlaced);
+      }
+   } else {
+      return quant::dequant_params(empty_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
+                                   frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
+                                   frame._descriptor._image_width, frame._descriptor._image_height,
+                                   _ctx->_lsd._bg_color_index, frame._min_code_size,  // This is a guess
+                                   frame._descriptor._interlaced);
+   }
+}
+
+quant::image gif::decode_image(gif_frame_context const& frame_ctx) const {
    std::vector<uint8_t> compressed_data, decompressed_data;
    _raw_file.seekg(frame_ctx._image_data_start);
    for_each_subblock(_raw_file, [&compressed_data] (uint8_t* data, uint16_t len) {
@@ -303,22 +307,7 @@ void gif::decode_image(gif_frame_context const& frame_ctx, std::vector<uint8_t>&
          return gif_parse_result::kSuccess;
       });
    lzw::lzw_decode_result result = lzw::lzw_decompress(compressed_data, decompressed_data, frame_ctx._min_code_size);
-   if (frame_ctx._descriptor._lct_present) {
-      dequantize_image(decompressed_data,
-                       result._bits_written,
-                       image_out,
-                       frame_ctx._local_color_table,
-                       frame_ctx._descriptor._lct_size + 1);
-   } else if (_ctx->_lsd._gct_present) {
-      dequantize_image(decompressed_data,
-                       result._bits_written,
-                       image_out,
-                       _ctx->_global_color_table,
-                       _ctx->_lsd._gct_size + 1);
-   } else {
-      printf("No color table available fixme\n");
-   }
 
+   return dequantize_image(dq_params_for_frame(frame_ctx), decompressed_data, result._bits_written);
 }
-
 }
