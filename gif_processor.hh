@@ -26,6 +26,7 @@ enum gif_parse_result {
 };
 
 struct gif_frame_context {
+   std::size_t _frame_number;
    std::optional<graphics_control_extension> _extension;
    image_descriptor _descriptor;
    std::vector<color_table_entry> _local_color_table;
@@ -57,12 +58,15 @@ private:
 
    gif_parse_result parse_contents();
    gif_parse_result parse_extension();
-   gif_parse_result parse_image_data();
+   gif_parse_result parse_image_data(std::size_t frame_number);
 
    gif_parse_result parse_application_extension();
 
    quant::dequant_params dq_params_for_frame(gif_frame_context const& frame) const;
-   quant::image decode_image(gif_frame_context const& frame_ctx) const;
+   quant::image decode_image(gif_frame_context const& frame_ctx, quant::image const& last_frame) const;
+   void apply_disposal_method(gif_frame_context const& frame_ctx,
+                              quant::image const& previous_frame,
+                              quant::image& frame);
 
 public:
    gif();
@@ -74,15 +78,29 @@ public:
    gif_parse_result open(std::string_view path);
    gif_parse_result open(std::ifstream&& stream);
 
+   // Apply disposal method to each frame_ctx
    template <typename T>
-   void foreach_frame_raw(T&& exec) {
+   void foreach_frame(T&& exec) {
       if (!_ctx) {
          return;
       }
-      std::vector<uint8_t> image_data;
-      for (gif_frame_context const& frame : _ctx->_frames) {
-         quant::image decode_frame = decode_image(frame);
-         exec(decode_frame, frame, _ctx->_global_color_table);
+      quant::image last_frame(_ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height, 0, 0,
+                              _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height);
+      last_frame.prepare_frame_bg();
+
+      for (gif_frame_context const& frame_ctx : _ctx->_frames) {
+         quant::image decode_frame = decode_image(frame_ctx, last_frame);
+         exec(decode_frame, frame_ctx, _ctx->_global_color_table);
+         if (frame_ctx._extension) {
+            if (frame_ctx._extension->_disposal_method == gif_disposal_method::kRestoreToBackground) {
+               decode_frame.clear_active();
+            }
+            if (frame_ctx._extension->_disposal_method != gif_disposal_method::kRestoreToPrevious) {
+               last_frame = std::move(decode_frame);
+            }
+         } else {
+            last_frame = std::move(decode_frame);
+         }
       }
    }
 };

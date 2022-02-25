@@ -101,23 +101,17 @@ void test_lzw_random_compress() {
 
 int main() {
    gifproc::gif test_gif;
-   test_gif.open("image0.gif");
+   test_gif.open("gif_test/disposebg.gif");
    int ctr = 0;
-   test_gif.foreach_frame_raw([&ctr] (gifproc::quant::image& img, gifproc::gif_frame_context const& ctx,
-                                      std::vector<gifproc::color_table_entry> const& gct) {
-         printf("Frame %d: bpp=%ld dims=%d %d\n", ctr, ctx._descriptor._lct_present ?
-                                                       ctx._descriptor._lct_size + 1 :
-                                                       gct.size(),
-                                                  ctx._descriptor._image_width, ctx._descriptor._image_height);
-         if (ctx._extension) {
-            printf("\tExtension data: Transparent=%d, delay time = %d, transparent index=%d\n",
-                  ctx._extension->_transparent_enabled, ctx._extension->_delay_time, ctx._extension->_transparent_index);
-         }
-         if (ctr == 40) {
-            std::ofstream out("Frame.raw", std::ios::binary);
-            out.write(reinterpret_cast<const char*>(img._image_data.data()), img._image_data.size());
-            out.close();
-         }
+   test_gif.foreach_frame([&ctr] (gifproc::quant::image& img, gifproc::gif_frame_context const& ctx,
+                                  std::vector<gifproc::color_table_entry> const& gct) {
+         printf("Image dims: (%d %d)\n", img._canvas_w, img._canvas_h);
+         std::string name = "gif_test/Frame";
+         name += std::to_string(ctr);
+         name += ".raw";
+         std::ofstream out(name.c_str(), std::ios::binary);
+         out.write(reinterpret_cast<const char*>(img._image_data.data()), img._image_data.size());
+         out.close();
          ctr++;
       });
 }

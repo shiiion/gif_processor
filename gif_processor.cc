@@ -172,8 +172,9 @@ gif_parse_result gif::parse_extension() {
    }
 }
 
-gif_parse_result gif::parse_image_data() {
+gif_parse_result gif::parse_image_data(std::size_t frame_number) {
    gif_frame_context& new_frame = _ctx->_frames.emplace_back();
+   new_frame._frame_number = frame_number;
 
    if (_active_gce) {
       new_frame._extension = std::move(_active_gce);
@@ -221,6 +222,7 @@ gif_parse_result gif::parse_contents() {
 
    // With the heading information out of the way, now we need to process a series of frames & extension blocks
    bool trailer_found = false;
+   std::size_t frame_num = 0;
    while (!trailer_found && !_raw_file.eof()) {
       uint8_t next_block = static_cast<uint8_t>(_raw_file.get());
       if (_raw_file.gcount() != 1) {
@@ -238,7 +240,8 @@ gif_parse_result gif::parse_contents() {
             block_parse_result = parse_extension();
             break;
          case kImageSeparator:
-            block_parse_result = parse_image_data();
+            block_parse_result = parse_image_data(frame_num);
+            frame_num++;
             break;
          case kGifTrailer:
             trailer_found = true;
@@ -261,45 +264,28 @@ quant::dequant_params gif::dq_params_for_frame(gif_frame_context const& frame) c
    if (empty_table.size() != 256) {
       empty_table.resize(256, {});
    }
+   std::optional<uint8_t> transparent_idx = std::nullopt;
+   std::optional<gif_disposal_method> disposal = std::nullopt;
+   if (frame._extension) {
+      transparent_idx = frame._extension->_transparent_enabled ?
+                        std::make_optional<uint8_t>(frame._extension->_transparent_index) :
+                        std::nullopt;
+      disposal = frame._extension->_disposal_method;
+   }
 
    if (frame._descriptor._lct_present) {
-      if (frame._extension && frame._extension->_transparent_enabled) {
-         return quant::dequant_params(frame._local_color_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
-                                      frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
-                                      frame._descriptor._image_width, frame._descriptor._image_height,
-                                      _ctx->_lsd._bg_color_index, frame._descriptor._lct_size + 1,
-                                      frame._descriptor._interlaced, frame._extension->_transparent_index);
-      } else {
-         return quant::dequant_params(frame._local_color_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
-                                      frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
-                                      frame._descriptor._image_width, frame._descriptor._image_height,
-                                      _ctx->_lsd._bg_color_index, frame._descriptor._lct_size + 1,
-                                      frame._descriptor._interlaced);
-      }
+      return quant::dequant_params(frame._local_color_table, frame._min_code_size, frame._descriptor._interlaced,
+                                   disposal, transparent_idx);
    } else if (_ctx->_lsd._gct_present) {
-      if (frame._extension && frame._extension->_transparent_enabled) {
-         return quant::dequant_params(_ctx->_global_color_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
-                                      frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
-                                      frame._descriptor._image_width, frame._descriptor._image_height,
-                                      _ctx->_lsd._bg_color_index, _ctx->_lsd._gct_size + 1,
-                                      frame._descriptor._interlaced, frame._extension->_transparent_index);
-      } else {
-         return quant::dequant_params(_ctx->_global_color_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
-                                      frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
-                                      frame._descriptor._image_width, frame._descriptor._image_height,
-                                      _ctx->_lsd._bg_color_index, _ctx->_lsd._gct_size + 1,
-                                      frame._descriptor._interlaced);
-      }
+      return quant::dequant_params(_ctx->_global_color_table, frame._min_code_size, frame._descriptor._interlaced,
+                                   disposal, transparent_idx);
    } else {
-      return quant::dequant_params(empty_table, _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height,
-                                   frame._descriptor._image_left_pos, frame._descriptor._image_top_pos,
-                                   frame._descriptor._image_width, frame._descriptor._image_height,
-                                   _ctx->_lsd._bg_color_index, frame._min_code_size,  // This is a guess
-                                   frame._descriptor._interlaced);
+      return quant::dequant_params(empty_table, frame._min_code_size, frame._descriptor._interlaced, disposal,
+                                   transparent_idx);
    }
 }
 
-quant::image gif::decode_image(gif_frame_context const& frame_ctx) const {
+quant::image gif::decode_image(gif_frame_context const& frame_ctx, quant::image const& last_frame) const {
    std::vector<uint8_t> compressed_data, decompressed_data;
    _raw_file.seekg(frame_ctx._image_data_start);
    for_each_subblock(_raw_file, [&compressed_data] (uint8_t* data, uint16_t len) {
@@ -307,7 +293,14 @@ quant::image gif::decode_image(gif_frame_context const& frame_ctx) const {
          return gif_parse_result::kSuccess;
       });
    lzw::lzw_decode_result result = lzw::lzw_decompress(compressed_data, decompressed_data, frame_ctx._min_code_size);
+   quant::image new_frame(_ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height, frame_ctx._descriptor._image_left_pos,
+                          frame_ctx._descriptor._image_top_pos, frame_ctx._descriptor._image_width,
+                          frame_ctx._descriptor._image_height);
 
-   return dequantize_image(dq_params_for_frame(frame_ctx), decompressed_data, result._bits_written);
+   quant::dequant_params params = dq_params_for_frame(frame_ctx);
+   new_frame.prepare_frame(params, last_frame);
+   new_frame.dequantize_from(params, decompressed_data, result._bits_written);
+   return new_frame;
 }
+
 }
