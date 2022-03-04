@@ -180,4 +180,21 @@ constexpr bitfld<T> create_nbits(T value, int num_bits) {
    return bitfld<T>(value, 0, num_bits - 1);
 }
 
+template <typename T>
+constexpr int min_bitsize(T value) {
+   constexpr auto leading_t = [](auto t) -> int {
+      if constexpr (sizeof(T) <= sizeof(unsigned int)) {
+         constexpr int kExtraBits = bitsize_v<unsigned int> - bitsize_v<T>;
+         return __builtin_clz(static_cast<unsigned int>(t - 1)) - kExtraBits;
+      } else {  // sizeof(T) == sizeof(unsigned long long)
+         return __builtin_clzll(static_cast<unsigned long long>(t - 1));
+      }
+   };
+   if (value == 0) {
+      return 1;
+   } else {
+      return bitsize_v<T> - leading_t(value);
+   }
+}
+
 }

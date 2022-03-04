@@ -58,10 +58,11 @@ enum gif_disposal_method : uint8_t {
 };
 
 struct application_extension {
-   uint8_t _block_size;
    char _application_identifier[8];
    char _authentication_code[3];
 };
+constexpr std::size_t kApplicationExtensionSize = 11;
+static_assert(sizeof(application_extension) == kApplicationExtensionSize);
 
 struct graphics_control_extension {
    bool _transparent_enabled : 1;
@@ -71,9 +72,10 @@ struct graphics_control_extension {
    uint16_t _delay_time;
    uint8_t _transparent_index;
 };
+constexpr std::size_t kGraphicsExtensionSize = 4;
+static_assert(sizeof(graphics_control_extension) == kGraphicsExtensionSize);
 
 struct plaintext_extension {
-   uint8_t _block_size;
    uint16_t _text_left_pos;
    uint16_t _text_top_pos;
    uint16_t _text_width;
@@ -83,6 +85,8 @@ struct plaintext_extension {
    uint8_t _text_fg_color_index;
    uint8_t _text_bg_color_index;
 };
+constexpr std::size_t kPlaintextExtensionSize = 12;
+static_assert(sizeof(plaintext_extension) == kPlaintextExtensionSize);
 
 struct netscape_extension {
    uint16_t _loop_count;

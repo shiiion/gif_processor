@@ -2,10 +2,12 @@
 #include <ctime>
 #include <random>
 
-#include "bitstream.hh"
 #include "bitfield.hh"
+#include "bitstream.hh"
+#include "dequantize.hh"
 #include "gif_processor.hh"
 #include "lzw.hh"
+#include "piximg.hh"
 #include "quantize.hh"
 
 void test_cbw_istream() {
@@ -99,19 +101,35 @@ void test_lzw_random_compress() {
    }
 }
 
-int main() {
+void test_make_funny(const char* path) {
    gifproc::gif test_gif;
-   test_gif.open("gif_test/disposebg.gif");
-   int ctr = 0;
-   test_gif.foreach_frame([&ctr] (gifproc::quant::image& img, gifproc::gif_frame_context const& ctx,
-                                  std::vector<gifproc::color_table_entry> const& gct) {
-         printf("Image dims: (%d %d)\n", img._canvas_w, img._canvas_h);
-         std::string name = "gif_test/Frame";
-         name += std::to_string(ctr);
-         name += ".raw";
-         std::ofstream out(name.c_str(), std::ios::binary);
-         out.write(reinterpret_cast<const char*>(img._image_data.data()), img._image_data.size());
-         out.close();
-         ctr++;
+   auto read_result = test_gif.open_read(path);
+   if (read_result != gifproc::gif_parse_result::kSuccess) {
+      return;
+   }
+   auto mq_ctx = gifproc::quant::begin_quantize_multiple(test_gif.width(), test_gif.height());
+   test_gif.foreach_frame([&mq_ctx] (gifproc::quant::gif_frame const& img, gifproc::gif_frame_context const& ctx,
+                                     std::vector<gifproc::color_table_entry> const& gct) {
+         gifproc::piximg pimg(img);
+         pimg.add_speech_bubble_to_top(6);
+         if (ctx._extension) {
+            gifproc::quant::step_quantize_multiple(pimg, mq_ctx, ctx._extension->_delay_time);
+         } else {
+            gifproc::quant::step_quantize_multiple(pimg, mq_ctx, 0);
+         }
       });
+   gifproc::quant::end_quantize_multiple(mq_ctx);
+
+   gifproc::gif out_gif;
+   out_gif.open_write("out.gif");
+   gifproc::quant::foreach_quantize_multi(mq_ctx, [&out_gif] (gifproc::quant::qimg const& img, uint16_t old_delay) {
+         out_gif.add_frame(img, old_delay);
+      });
+   out_gif.finish_write(mq_ctx._palette);
+}
+
+int main(int argc, char** argv) {
+   if (argc == 2) {
+      test_make_funny(argv[1]);
+   }
 }

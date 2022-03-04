@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "gif_spec.hh"
-#include "quantize.hh"
+#include "quant_base.hh"
 
 namespace gifproc {
 
@@ -22,7 +22,7 @@ enum gif_parse_result {
    kInvalidExtensionLabel,
    kMissingBlockTerminator,
    kInvalidApplicationData,
-   kInvalidGCEData,
+   kInvalidBlockSize,
 };
 
 struct gif_frame_context {
@@ -50,11 +50,19 @@ private:
       std::optional<netscape_extension> _nse;
    };
 
-   std::unique_ptr<deserialized_gif_context> _ctx;
+   std::unique_ptr<deserialized_gif_context> _dctx;
    deserialized_gif_context* _ctx_debug;
    std::optional<graphics_control_extension> _active_gce;
 
-   mutable std::ifstream _raw_file;
+   struct serialized_gif_context {
+      std::size_t _max_w;
+      std::size_t _max_h;
+      gif_version _required_version;
+   };
+   std::unique_ptr<serialized_gif_context> _sctx;
+
+   mutable std::ifstream _raw_ifile;
+   mutable std::ofstream _raw_ofile;
 
    gif_parse_result parse_contents();
    gif_parse_result parse_extension();
@@ -62,11 +70,10 @@ private:
 
    gif_parse_result parse_application_extension();
 
-   quant::dequant_params dq_params_for_frame(gif_frame_context const& frame) const;
-   quant::image decode_image(gif_frame_context const& frame_ctx, quant::image const& last_frame) const;
+   quant::gif_frame decode_image(gif_frame_context const& frame_ctx, quant::gif_frame const& last_frame) const;
    void apply_disposal_method(gif_frame_context const& frame_ctx,
-                              quant::image const& previous_frame,
-                              quant::image& frame);
+                              quant::gif_frame const& previous_frame,
+                              quant::gif_frame& frame);
 
 public:
    gif();
@@ -75,22 +82,24 @@ public:
    gif(gif const&) = delete;
    gif& operator=(gif const&) = delete;
 
-   gif_parse_result open(std::string_view path);
-   gif_parse_result open(std::ifstream&& stream);
+   gif_parse_result open_read(std::string_view path);
+   gif_parse_result open_read(std::ifstream&& stream);
+
+   uint16_t width() const { return _dctx->_lsd._canvas_width; }
+   uint16_t height() const { return _dctx->_lsd._canvas_height; }
 
    // Apply disposal method to each frame_ctx
    template <typename T>
    void foreach_frame(T&& exec) {
-      if (!_ctx) {
+      if (!_dctx) {
          return;
       }
-      quant::image last_frame(_ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height, 0, 0,
-                              _ctx->_lsd._canvas_width, _ctx->_lsd._canvas_height);
-      last_frame.prepare_frame_bg();
+      quant::gif_frame last_frame(_dctx->_lsd._canvas_width, _dctx->_lsd._canvas_height, 0, 0,
+                                  _dctx->_lsd._canvas_width, _dctx->_lsd._canvas_height);
 
-      for (gif_frame_context const& frame_ctx : _ctx->_frames) {
-         quant::image decode_frame = decode_image(frame_ctx, last_frame);
-         exec(decode_frame, frame_ctx, _ctx->_global_color_table);
+      for (gif_frame_context const& frame_ctx : _dctx->_frames) {
+         quant::gif_frame decode_frame = decode_image(frame_ctx, last_frame);
+         exec(decode_frame, frame_ctx, _dctx->_global_color_table);
          if (frame_ctx._extension) {
             if (frame_ctx._extension->_disposal_method == gif_disposal_method::kRestoreToBackground) {
                decode_frame.clear_active();
@@ -103,6 +112,13 @@ public:
          }
       }
    }
+
+   // Writing
+   void open_write(std::string_view path);
+   void add_frame(piximg const& frame, std::optional<uint16_t> delay = std::nullopt);
+   void add_frame(quant::qimg const& quant_frame, std::optional<uint16_t> delay = std::nullopt);
+   void finish_write();
+   void finish_write(std::vector<color_table_entry> const& gct);
 };
 }
 

@@ -48,8 +48,9 @@ enum class decompress_status {
    // EOF was reached without reading an EOI code
    kUnexpectedEof,
 
-   kMissingInitialClearCode,
    // Clear code is missing at the start of the data stream
+   kMissingInitialClearCode,
+
    // Clear code is missing when codebook is full
    kDictionaryOverflow,
 

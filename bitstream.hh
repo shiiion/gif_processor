@@ -147,6 +147,14 @@ public:
       return *this;
    }
 
+   void seek_to_index(std::size_t index) {
+      const std::size_t bytes_to_i = (index / _Nbits) + 1;
+      if (_sink.size() < bytes_to_i) {
+         _sink.resize(bytes_to_i);
+      }
+      _cpos = index * _Nbits;
+   }
+
    constexpr streampos tell_index() const {
       return _cpos / _Nbits;
    }
