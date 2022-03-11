@@ -59,12 +59,12 @@ void piximg::draw_line_h(int64_t x0, int64_t y0, int64_t x1, int64_t y1, pixel c
 
    for (int64_t y = y0; y <= y1; y++) {
       std::size_t idx = static_cast<std::size_t>((y * _w) + x);
-      for (int i = -(thickness / 2); i <= (thickness / 2); i++) {
-         int64_t sidx = static_cast<int64_t>(idx) + i * _w;
-         if (sidx >= 0) {
-            _img[sidx] = color;
-         }
-      }
+      // for (int i = -(thickness / 2); i <= (thickness / 2); i++) {
+      //    int64_t sidx = static_cast<int64_t>(idx) + i * _w;
+      //    if (sidx >= 0) {
+      //       _img[sidx] = color;
+      //    }
+      // }
       if (D > 0) {
          x += xi;
          for (int64_t y_clr = y; y_clr >= 0; y_clr--) {
@@ -94,12 +94,12 @@ void piximg::draw_line_l(int64_t x0, int64_t y0, int64_t x1, int64_t y1, pixel c
       for (int64_t y_clr = y; y_clr >= 0; y_clr--) {
          _img[(y_clr * _w) + x] = pixel(0, 0, 0, 0);
       }
-      for (int i = -(thickness / 2); i <= (thickness / 2); i++) {
-         int64_t sidx = static_cast<int64_t>(idx) + i * _w;
-         if (sidx >= 0) {
-            _img[sidx] = color;
-         }
-      }
+      // for (int i = -(thickness / 2); i <= (thickness / 2); i++) {
+      //    int64_t sidx = static_cast<int64_t>(idx) + i * _w;
+      //    if (sidx >= 0) {
+      //       _img[sidx] = color;
+      //    }
+      // }
       if (D > 0) {
          y += yi;
          D += 2 * (dy - dx);

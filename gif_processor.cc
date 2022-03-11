@@ -341,11 +341,7 @@ quant::gif_frame gif::decode_image(gif_frame_context const& frame_ctx, quant::gi
          compressed_data.insert(compressed_data.end(), data, data + len);
          return gif_parse_result::kSuccess;
       });
-   std::ofstream c_frame_file("frame_compressed.bin", std::ios::binary);
-   c_frame_file.write(reinterpret_cast<char*>(compressed_data.data()), compressed_data.size());
-   c_frame_file.close();
    lzw::lzw_decode_result result = lzw::lzw_decompress(compressed_data, decompressed_data, frame_ctx._min_code_size);
-   printf("Decode result: %d\n", static_cast<int>(result._status));
 
    std::optional<uint8_t> transparent_index = std::nullopt;
    std::optional<gif_disposal_method> disposal_method = std::nullopt;

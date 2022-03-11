@@ -120,8 +120,7 @@ void test_make_funny(const char* path, int thickness, int range_b, int range_e) 
          if (ctr % 1 == 0) {
             if (ctr >= range_b && ctr <= range_e) {
                gifproc::piximg pimg(img);
-               pimg.dump_to("frame.raw");
-               //pimg.add_speech_bubble_to_top(thickness);
+               pimg.add_speech_bubble_to_top(thickness);
                if (ctx._extension) {
                   gifproc::quant::step_quantize_multiple(pimg, mq_ctx, ctx._extension->_delay_time * 1);
                } else {
@@ -144,16 +143,12 @@ void test_make_funny(const char* path, int thickness, int range_b, int range_e) 
 int main(int argc, char** argv) {
    if (argc == 2) {
       test_make_funny(argv[1], 6, 0, -1);
-   } else if (argc == 3) {
-      int val;
-      val = strtol(argv[2], nullptr, 10);
-      test_make_funny(argv[1], val, 0, -1);
-   } else if (argc == 5) {
+   } else if (argc == 4) {
       int val, val2, val3;
-      val = strtol(argv[2], nullptr, 10);
-      val2 = strtol(argv[3], nullptr, 10);
-      val3 = strtol(argv[4], nullptr, 10);
-      test_make_funny(argv[1], val, val2, val3);
+      // val = strtol(argv[2], nullptr, 10);
+      val2 = strtol(argv[2], nullptr, 10);
+      val3 = strtol(argv[3], nullptr, 10);
+      test_make_funny(argv[1], 0, val2, val3);
    } else {
       printf("Invalid argument count");
    }
