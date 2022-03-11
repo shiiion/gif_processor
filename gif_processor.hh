@@ -87,6 +87,7 @@ public:
 
    uint16_t width() const { return _dctx->_lsd._canvas_width; }
    uint16_t height() const { return _dctx->_lsd._canvas_height; }
+   std::size_t nframes() const { return _dctx->_frames.size(); }
 
    // Apply disposal method to each frame_ctx
    template <typename T>

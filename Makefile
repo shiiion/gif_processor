@@ -1,7 +1,7 @@
 CXX := g++
 CXXFLAGS_DEBUG := -O0 -g
 CXXFLAGS_RELEASE := -O2
-CXXFLAGS := $(CXXFLAGS_RELEASE) -Wall -MD -MP
+CXXFLAGS := $(CXXFLAGS_DEBUG) -Wall -MD -MP --std=c++17
 
 SRC = $(wildcard *.cc)
 

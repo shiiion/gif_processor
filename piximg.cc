@@ -50,7 +50,7 @@ void piximg::draw_line_h(int64_t x0, int64_t y0, int64_t x1, int64_t y1, pixel c
    int64_t dx = x1 - x0;
    int64_t dy = y1 - y0;
    int64_t xi = 1;
-   if (dy > 0) {
+   if (dx < 0) {
       xi = -1;
       dx = -dx;
    }
@@ -59,8 +59,11 @@ void piximg::draw_line_h(int64_t x0, int64_t y0, int64_t x1, int64_t y1, pixel c
 
    for (int64_t y = y0; y <= y1; y++) {
       std::size_t idx = static_cast<std::size_t>((y * _w) + x);
-      for (int i = 0; i < thickness; i++) {
-         _img[idx + i] = color;
+      for (int i = -(thickness / 2); i <= (thickness / 2); i++) {
+         int64_t sidx = static_cast<int64_t>(idx) + i * _w;
+         if (sidx >= 0) {
+            _img[sidx] = color;
+         }
       }
       if (D > 0) {
          x += xi;

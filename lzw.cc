@@ -249,10 +249,16 @@ private:
       }
    }
 
+   constexpr bool deferring_clear_code() const {
+      return base_type::_codebook_size == base_type::kMaxCodebookEntries;
+   }
+
    // The decompressor is always one step behind the compressor, so we need to adjust how we determine the bitsize
    // we will read
    constexpr uint8_t get_read_bitsize() const {
-      return 32 - __builtin_clz(static_cast<unsigned int>(base_type::_codebook_size));
+      return 32 - __builtin_clz(static_cast<unsigned int>(deferring_clear_code() ?
+                                                          base_type::kHighestCodebookEntry :
+                                                          base_type::_codebook_size));
    }
 
 public:
@@ -301,13 +307,6 @@ public:
          return decompress_status::kUnexpectedEof;
       }
 
-      // If a clear code was not seen above but the maximum number of codebook entries has been reached, then something
-      // went bunk
-      if (base_type::_codebook_size == base_type::kMaxCodebookEntries) {
-         return decompress_status::kDictionaryOverflow;
-      }
-
-
       if (cur_code == base_type::_codebook_size) {
          // Very special case, if a clear code was just sent then we can't infer any previous info, thus an invalid
          // _prev_code value means the encoded data is bad
@@ -320,10 +319,12 @@ public:
          out << _codebook_table[_prev_code]._base_index;
 
          // New dictionary entry consists of the start code of the previous sequence
-         _codebook_table[base_type::_codebook_size].initialize(_prev_code,
-                                                               _codebook_table[_prev_code]._base_index,
-                                                               _codebook_table[_prev_code]._base_index);
-         base_type::_codebook_size++;
+         if (!deferring_clear_code()) {
+            _codebook_table[base_type::_codebook_size].initialize(_prev_code,
+                                                                  _codebook_table[_prev_code]._base_index,
+                                                                  _codebook_table[_prev_code]._base_index);
+            base_type::_codebook_size++;
+         }
       } else if (cur_code < base_type::_codebook_size) {
          // We may need to handle a just-cleared codebook, signified by _prev_code == codebook_entry::kInvalidConnection
          if (_prev_code == codebook_entry::kInvalidConnection) {
@@ -332,10 +333,12 @@ public:
             // First, write out the decompressed code to our output stream
             decompress_impl(cur_code, out);
             // Then handle adding a new code to our codebook
-            _codebook_table[base_type::_codebook_size].initialize(_prev_code,
-                                                                  _codebook_table[cur_code]._base_index,
-                                                                  _codebook_table[_prev_code]._base_index);
-            base_type::_codebook_size++;
+            if (!deferring_clear_code()) {
+               _codebook_table[base_type::_codebook_size].initialize(_prev_code,
+                                                                     _codebook_table[cur_code]._base_index,
+                                                                     _codebook_table[_prev_code]._base_index);
+               base_type::_codebook_size++;
+            }
          }
       } else {
          // Invalid code, we can't infer what the encoder was doing

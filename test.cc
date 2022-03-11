@@ -101,22 +101,35 @@ void test_lzw_random_compress() {
    }
 }
 
-void test_make_funny(const char* path) {
+void test_make_funny(const char* path, int thickness, int range_b, int range_e) {
    gifproc::gif test_gif;
    auto read_result = test_gif.open_read(path);
    if (read_result != gifproc::gif_parse_result::kSuccess) {
       return;
    }
    auto mq_ctx = gifproc::quant::begin_quantize_multiple(test_gif.width(), test_gif.height());
-   test_gif.foreach_frame([&mq_ctx] (gifproc::quant::gif_frame const& img, gifproc::gif_frame_context const& ctx,
+   int ctr = 0;
+   int size = static_cast<int>(test_gif.nframes());
+   range_b = (range_b % size + size) % size;
+   range_e = (range_e % size + size) % size;
+   if (range_b > range_e) {
+      return;
+   }
+   test_gif.foreach_frame([&mq_ctx, thickness, &ctr, range_b, range_e] (gifproc::quant::gif_frame const& img, gifproc::gif_frame_context const& ctx,
                                      std::vector<gifproc::color_table_entry> const& gct) {
-         gifproc::piximg pimg(img);
-         pimg.add_speech_bubble_to_top(6);
-         if (ctx._extension) {
-            gifproc::quant::step_quantize_multiple(pimg, mq_ctx, ctx._extension->_delay_time);
-         } else {
-            gifproc::quant::step_quantize_multiple(pimg, mq_ctx, 0);
+         if (ctr % 1 == 0) {
+            if (ctr >= range_b && ctr <= range_e) {
+               gifproc::piximg pimg(img);
+               pimg.dump_to("frame.raw");
+               //pimg.add_speech_bubble_to_top(thickness);
+               if (ctx._extension) {
+                  gifproc::quant::step_quantize_multiple(pimg, mq_ctx, ctx._extension->_delay_time * 1);
+               } else {
+                  gifproc::quant::step_quantize_multiple(pimg, mq_ctx, 0);
+               }
+            }
          }
+         ctr++;
       });
    gifproc::quant::end_quantize_multiple(mq_ctx);
 
@@ -130,6 +143,19 @@ void test_make_funny(const char* path) {
 
 int main(int argc, char** argv) {
    if (argc == 2) {
-      test_make_funny(argv[1]);
+      test_make_funny(argv[1], 6, 0, -1);
+   } else if (argc == 3) {
+      int val;
+      val = strtol(argv[2], nullptr, 10);
+      test_make_funny(argv[1], val, 0, -1);
+   } else if (argc == 5) {
+      int val, val2, val3;
+      val = strtol(argv[2], nullptr, 10);
+      val2 = strtol(argv[3], nullptr, 10);
+      val3 = strtol(argv[4], nullptr, 10);
+      test_make_funny(argv[1], val, val2, val3);
+   } else {
+      printf("Invalid argument count");
    }
+   return 0;
 }

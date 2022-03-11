@@ -3,7 +3,10 @@
 *.a
 *.so
 *.taghl
+*.json
+.projectile
 tags
 
 build/
 bin/
+.ccls-cache/
