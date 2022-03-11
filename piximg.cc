@@ -157,12 +157,12 @@ void piximg::add_speech_bubble_to_top(int thickness) {
          std::size_t mx_p = std::min(_w - 1, std::max(std::size_t{0}, static_cast<std::size_t>(mx + 0.5)));
          std::size_t my_p = std::min(_h - 1, std::max(std::size_t{0}, static_cast<std::size_t>(my + 0.5)));
          draw_line(mx_p, my_p, x_p, y_p, pixel(0, 0, 0, 255), thickness);
-         for (std::size_t i = py_p - (thickness / 2); i < my_p; i++) {
-            std::size_t idx = (i * _w) + px_p;
-            for (int i = 0; i < thickness; i++) {
-               _img[idx + i] = pixel(0, 0, 0, 255);
-            }
-         }
+         // for (std::size_t i = py_p - (thickness / 2); i < my_p; i++) {
+         //    std::size_t idx = (i * _w) + px_p;
+         //    for (int i = 0; i < thickness; i++) {
+         //       _img[idx + i] = pixel(0, 0, 0, 255);
+         //    }
+         // }
          i += 3;
       } else {
          const double pt = kStart + (i - 1) * kStep;
