@@ -381,6 +381,7 @@ void gif::open_write(std::string_view path) {
    // Buffer space for our header and LSD, filled on final write
    std::fill_n(std::ostream_iterator<char>(_raw_ofile), sizeof(gif_header) + sizeof(logical_screen_descriptor), 0);
    std::fill_n(std::ostream_iterator<char>(_raw_ofile), 256 * sizeof(color_table_entry), 0);
+   std::fill_n(std::ostream_iterator<char>(_raw_ofile), 3 + sizeof(application_extension) + 5, 0);
 }
 
 void gif::add_frame(piximg const& frame, std::optional<uint16_t> delay) {
@@ -460,18 +461,7 @@ void gif::finish_write() {
    if (_sctx == nullptr || !_raw_ofile.is_open()) {
       return;
    }
-   application_extension ext;
-   std::copy(kNetscapeId.begin(), kNetscapeId.end(), ext._application_identifier);
-   std::copy(kNetscapeAuth.begin(), kNetscapeAuth.end(), ext._authentication_code);
-   _raw_ofile.put(kExtensionIntroducer);
-   _raw_ofile.put(kApplicationExtensionLabel);
-   _raw_ofile.put(kApplicationExtensionSize);
-   _raw_ofile.write(reinterpret_cast<const char*>(&ext), sizeof(application_extension));
-   _raw_ofile.put(3);
-   _raw_ofile.put(1);
-   _raw_ofile.put(0);
-   _raw_ofile.put(0);
-   _raw_ofile.put(0);
+
    _raw_ofile.put(kGifTrailer);
    _raw_ofile.seekp(0, std::ios::beg);
 
@@ -494,10 +484,25 @@ void gif::finish_write() {
    lsd._pixel_aspect_ratio = 0;
 
    _raw_ofile.write(reinterpret_cast<const char*>(&lsd), sizeof(logical_screen_descriptor));
+
+   _raw_ofile.seekp(sizeof(gif_header) + sizeof(logical_screen_descriptor) + 256 * sizeof(color_table_entry));
+   application_extension ext;
+   std::copy(kNetscapeId.begin(), kNetscapeId.end(), ext._application_identifier);
+   std::copy(kNetscapeAuth.begin(), kNetscapeAuth.end(), ext._authentication_code);
+   _raw_ofile.put(kExtensionIntroducer);
+   _raw_ofile.put(kApplicationExtensionLabel);
+   _raw_ofile.put(kApplicationExtensionSize);
+   _raw_ofile.write(reinterpret_cast<const char*>(&ext), sizeof(application_extension));
+   _raw_ofile.put(3);
+   _raw_ofile.put(1);
+   _raw_ofile.put(0);
+   _raw_ofile.put(0);
+   _raw_ofile.put(0);
 }
 
 void gif::finish_write(std::vector<color_table_entry> const& gct) {
    finish_write();
+   _raw_ofile.seekp(sizeof(gif_header) + sizeof(logical_screen_descriptor));
    for (color_table_entry const& e : gct) {
       _raw_ofile.write(reinterpret_cast<const char*>(&e), sizeof(color_table_entry));
    }

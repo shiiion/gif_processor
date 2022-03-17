@@ -8,9 +8,9 @@
 #define __builtin_clzll __lzcnt64
 static int __builtin_ctz(long int val) {
     int count = 0;
-    const unsigned long int ulv = static_cast<unsigned long int>(val);
+    unsigned long int ulv = static_cast<unsigned long int>(val);
     while (!(ulv & 1) && (count < 32)) {
-        ulv >> 1;
+        ulv >>= 1;
         count++;
     }
     return count;
@@ -18,9 +18,9 @@ static int __builtin_ctz(long int val) {
 
 static int __builtin_ctzll(long long int val) {
     int count = 0;
-    const unsigned long long int ulv = static_cast<unsigned long long int>(val);
+    unsigned long long int ulv = static_cast<unsigned long long int>(val);
     while (!(ulv & 1) && (count < 64)) {
-        ulv >> 1;
+        ulv >>= 1;
         count++;
     }
     return count;
