@@ -10,3 +10,10 @@ tags
 build/
 bin/
 .ccls-cache/
+.vs/
+x64/
+Debug/
+Release/
+gif_processor/x64/
+gif_processor/Debug/
+gif_processor/Release/

@@ -2,6 +2,30 @@
 
 #include <cstdint>
 #include <type_traits>
+#ifdef _WIN32
+#include <intrin.h>
+#define __builtin_clz __lzcnt
+#define __builtin_clzll __lzcnt64
+static int __builtin_ctz(long int val) {
+    int count = 0;
+    const unsigned long int ulv = static_cast<unsigned long int>(val);
+    while (!(ulv & 1) && (count < 32)) {
+        ulv >> 1;
+        count++;
+    }
+    return count;
+}
+
+static int __builtin_ctzll(long long int val) {
+    int count = 0;
+    const unsigned long long int ulv = static_cast<unsigned long long int>(val);
+    while (!(ulv & 1) && (count < 64)) {
+        ulv >> 1;
+        count++;
+    }
+    return count;
+}
+#endif
 
 namespace gifproc::util {
 
